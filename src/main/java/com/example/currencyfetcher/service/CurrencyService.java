@@ -1,6 +1,6 @@
-package com.example.currencyfetcher.service;
+package com.example.currencyfetcher.service.impl;
 
-import com.example.currencyfetcher.model.CachedCurrency;
+import com.example.currencyfetcher.cache.CachedCurrency;
 import com.example.currencyfetcher.model.CurrencyRate;
 import com.example.currencyfetcher.repository.CurrencyRateRepository;
 import org.springframework.beans.factory.annotation.Value;

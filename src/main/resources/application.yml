@@ -1,0 +1,21 @@
+# application.yml
+spring:
+application:
+name: demo
+datasource:
+url: jdbc:h2:mem:currencydb
+driver-class-name: org.h2.Driver
+username: sa
+password: ""
+jpa:
+database-platform: org.hibernate.dialect.H2Dialect
+hibernate:
+ddl-auto: update
+h2:
+console:
+enabled: true
+
+exchange:
+api:
+key: 21ba585b7ad8ad6e152dfd57
+base-url: https://v6.exchangerate-api.com/v6
