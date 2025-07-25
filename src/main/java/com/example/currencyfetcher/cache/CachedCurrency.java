@@ -1,4 +1,4 @@
-package com.example.currencyfetcher.model;
+package com.example.currencyfetcher.cache;
 
 import java.time.LocalDateTime;
 

@@ -3,7 +3,7 @@
 **Author:** Maria Chrysanthou  
 **Date:** 17/07/2025
 
-A Spring Boot backend service that fetches live currency exchange rates from the API Layer API, stores them in a database, caches them, and exposes multiple REST endpoints to query, convert, and filter them.
+A Spring Boot backend service that fetches live currency exchange rates from the [ExchangeRate API](https://www.exchangerate-api.com), stores them in a database, caches them, and exposes multiple REST endpoints to query, convert, and filter them.
 
 ---
 
@@ -11,10 +11,11 @@ A Spring Boot backend service that fetches live currency exchange rates from the
 
 - Fetches live rates every 60 seconds and persists them in the DB
 - Caches rates in-memory to reduce DB/API load
+- DTOs used for clean and secure API responses
 - Convert currencies using latest fetched rates
 - Filter currencies by min rate
 - Get top N currencies with highest rate
-- Validate and list supported currencies if input is invalid
+- Global exception handling using `@ControllerAdvice` for clean error responses
 
 ---
 
@@ -25,6 +26,7 @@ A Spring Boot backend service that fetches live currency exchange rates from the
 - Spring Scheduler
 - Spring Web (WebClient)
 - H2 Database (in-memory)
+- ModelMapper
 - Maven
 - Lombok
 
@@ -42,7 +44,9 @@ A Spring Boot backend service that fetches live currency exchange rates from the
 
    Create (or update) your `application.properties`:
    ```properties
-   exchange.api.key=YOUR_API_KEY_HERE
+   exchange.api.key=YOUR_API_KEY
+   exchange.api.base-url=https://v6.exchangerate-api.com/v6
+
    ```
 
 3. **Run the app**
@@ -58,7 +62,7 @@ A Spring Boot backend service that fetches live currency exchange rates from the
 
 ### 1. Get Latest Rate
 ```http
-GET /api/currency/{code}
+GET /{code}
 ```
 Returns the latest rate from DB.
 
@@ -66,7 +70,7 @@ Returns the latest rate from DB.
 
 ### 2. Get Cached Rate
 ```http
-GET /api/currency/api/currency/{code}
+GET /api/currency/{code}
 ```
 Returns rate from in-memory cache (if not expired).
 
@@ -74,7 +78,7 @@ Returns rate from in-memory cache (if not expired).
 
 ### 3. Convert Between Currencies
 ```http
-GET /api/currency/convert?from=USD&to=JPY&amount=100
+GET /convert?from=USD&to=JPY&amount=100
 ```
 Returns:
 ```json
@@ -90,7 +94,7 @@ Returns:
 
 ### 4. Filter by Min Rate
 ```http
-GET /api/currency/filter?minRate=5.0
+GET /filter?minRate=5.0
 ```
 Returns all currencies whose latest rate is ≥ 5.0.
 
@@ -98,7 +102,7 @@ Returns all currencies whose latest rate is ≥ 5.0.
 
 ### 5. Top N Currencies by Rate
 ```http
-GET /api/currency/top?limit=5
+GET /top?limit=5
 ```
 Returns the top 5 currencies by exchange rate.
 
@@ -109,7 +113,7 @@ Returns the top 5 currencies by exchange rate.
 Every 60 seconds, the app sends a request to:
 
 ```http
-https://api.apilayer.com/exchangerates_data/latest
+https://v6.exchangerate-api.com/v6/{API_KEY}/latest/USD
 ```
 
 - Parses the `rates` map
@@ -132,10 +136,28 @@ https://api.apilayer.com/exchangerates_data/latest
 
 ```cpp
 com.example.currencyfetcher
-├── controller         // REST APIs
-├── service            // Business logic & caching
-├── model              // Entity + Cache 
-├── repository         // Spring Data JPA
-└── resources
-    └── application.properties
-```
+├── cache/                 # In-memory caching objects
+│   └── CachedCurrency.java
+├── clients/                 
+│   └── ExchangeClient.java
+├── config/                # Configuration beans 
+│   └──  WebClientConfig.java
+├── controller/            # REST API controller
+│   └── CurrencyController.java
+├── dto/                   # Data Transfer Objects (used in API layer)
+│   ├── CurrencyResponseDto.java
+│   ├── ConvertedCurrencyDto.java
+│   └── ErrorResponseDto.java
+├── exceptions/            # Custom exceptions + global handler
+│   ├── InvalidCurrencyException.java
+│   └── GlobalExceptionHandler.java
+├── model/                 # Entity (DB model)
+│   └── CurrencyRate.java
+├── repository/            # JPA repository
+│   └── CurrencyRateRepository.java
+├── service/               # Interfaces and implementations
+│   ├── CurrencyService.java
+│   └── impl/
+│       └── CurrencyServiceImpl.java
+└── CurrencyFetcherApplication.java
+

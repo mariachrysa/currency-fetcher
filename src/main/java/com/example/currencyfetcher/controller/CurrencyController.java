@@ -1,17 +1,13 @@
 package com.example.currencyfetcher.controller;
 
-import com.example.currencyfetcher.model.CachedCurrency;
+import com.example.currencyfetcher.cache.CachedCurrency;
 import com.example.currencyfetcher.model.CurrencyRate;
 import com.example.currencyfetcher.repository.CurrencyRateRepository;
 import com.example.currencyfetcher.service.CurrencyService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.Optional;
-import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/currency")
@@ -32,47 +28,26 @@ public class CurrencyController {
      */
     @GetMapping("/{code}")
     public ResponseEntity<?> getLatestRate(@PathVariable String code) {
-        List<CurrencyRate> list = repository.findByCurrencyCodeOrderByTimestampDesc(code.toUpperCase());
-
-        if (list.isEmpty()) {
-            List<String> all = repository.findAll().stream()
-                    .map(CurrencyRate::getCurrencyCode)
-                    .distinct()
-                    .toList();
-            return ResponseEntity.badRequest().body(Map.of(
-                    "error", "Invalid currency code: " + code,
-                    "validCurrencies", all
-            ));
-        }
-
-        CurrencyRate latest = list.get(0);
-        return ResponseEntity.ok(latest);
+        CurrencyRate result = currencyService.getLatestFromDBOrThrow(code);
+        return ResponseEntity.ok(result);
     }
 
+
     /**
-     * GET /api/currency/api/currency/{code}
+     * GET /api/currency/{code}
      * Same purpose as above, but uses internal cache if available.
      * Returns rate and timestamp for the given currency.
      */
     @GetMapping("/api/currency/{code}")
     public ResponseEntity<?> getCurrency(@PathVariable String code) {
-        Optional<CachedCurrency> result = currencyService.getCurrencyRate(code);
-
-        if (result.isEmpty()) {
-            List<String> available = repository.findAllCurrencies(); // You may need a custom query here
-            return ResponseEntity
-                    .badRequest()
-                    .body(Map.of("error", "Invalid currency code: " + code, "validCurrencies", available));
-        }
-
-        CachedCurrency rate = result.get();
+        CachedCurrency rate = currencyService.getCachedCurrencyOrThrow(code);
         return ResponseEntity.ok(Map.of(
                 "currency", code.toUpperCase(),
                 "rate", rate.getRate(),
                 "timestamp", rate.getTimestamp().toString()
         ));
-
     }
+
 
     /**
      * GET /api/currency/convert?from=USD&to=JPY&amount=100
@@ -83,27 +58,9 @@ public class CurrencyController {
     public ResponseEntity<?> convertCurrency(@RequestParam String from,
                                              @RequestParam String to,
                                              @RequestParam double amount) {
-        Optional<CachedCurrency> fromRateOpt = currencyService.getCurrencyRate(from);
-        Optional<CachedCurrency> toRateOpt = currencyService.getCurrencyRate(to);
-
-        if (fromRateOpt.isEmpty() || toRateOpt.isEmpty()) {
-            return ResponseEntity.badRequest().body(Map.of(
-                    "error", "Invalid currency code(s)",
-                    "validCurrencies", repository.findAllCurrencies()
-            ));
-        }
-
-        double fromRate = fromRateOpt.get().getRate();
-        double toRate = toRateOpt.get().getRate();
-        double converted = amount * (toRate / fromRate);
-
-        return ResponseEntity.ok(Map.of(
-                "from", from.toUpperCase(),
-                "to", to.toUpperCase(),
-                "amount", amount,
-                "converted", converted
-        ));
+        return ResponseEntity.ok(currencyService.convertCurrencyOrThrow(from, to, amount));
     }
+
 
     /**
      * GET /api/currency/filter?minRate=5.0
@@ -112,27 +69,7 @@ public class CurrencyController {
      */
     @GetMapping("/filter")
     public ResponseEntity<?> filterByMinRate(@RequestParam double minRate) {
-        List<CurrencyRate> latestRates = repository.findAll();
-
-        Map<String, CurrencyRate> latestPerCurrency = latestRates.stream()
-                .collect(Collectors.toMap(
-                        CurrencyRate::getCurrencyCode,
-                        cr -> cr,
-                        (cr1, cr2) -> cr1.getTimestamp().isAfter(cr2.getTimestamp()) ? cr1 : cr2
-                ));
-
-        List<Map<String, Object>> filtered = latestPerCurrency.values().stream()
-                .filter(rate -> rate.getRate() >= minRate)
-                .map(rate -> {
-                    Map<String, Object> map = new HashMap<>();
-                    map.put("currency", rate.getCurrencyCode());
-                    map.put("rate", rate.getRate());
-                    map.put("timestamp", rate.getTimestamp().toString());
-                    return map;
-                })
-                .collect(Collectors.toList());
-
-        return ResponseEntity.ok(filtered);
+        return ResponseEntity.ok(currencyService.filterByMinRate(minRate));
     }
 
     /**
@@ -142,27 +79,7 @@ public class CurrencyController {
      */
     @GetMapping("/top")
     public ResponseEntity<?> topCurrencies(@RequestParam(defaultValue = "5") int limit) {
-        List<CurrencyRate> latestRates = repository.findAll();
-
-        Map<String, CurrencyRate> latestPerCurrency = latestRates.stream()
-                .collect(Collectors.toMap(
-                        CurrencyRate::getCurrencyCode,
-                        cr -> cr,
-                        (cr1, cr2) -> cr1.getTimestamp().isAfter(cr2.getTimestamp()) ? cr1 : cr2
-                ));
-
-        List<Map<String, Object>> top = latestPerCurrency.values().stream()
-                .sorted((a, b) -> Double.compare(b.getRate(), a.getRate()))
-                .limit(limit)
-                .map(rate -> {
-                    Map<String, Object> map = new HashMap<>();
-                    map.put("currency", rate.getCurrencyCode());
-                    map.put("rate", rate.getRate());
-                    return map;
-                })
-                .collect(Collectors.toList());
-
-        return ResponseEntity.ok(top);
+        return ResponseEntity.ok(currencyService.getTopCurrencies(limit));
     }
 
 }

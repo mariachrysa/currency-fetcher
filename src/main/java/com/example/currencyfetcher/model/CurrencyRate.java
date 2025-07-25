@@ -16,5 +16,4 @@ public class CurrencyRate {
     private String currencyCode;
     private Double rate;
     private LocalDateTime timestamp;
-
 }
