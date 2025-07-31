@@ -1,34 +1,71 @@
 package com.example.currencyfetcher.exceptions;
 
-import com.example.currencyfetcher.repository.CurrencyRateRepository;
+import com.example.currencyfetcher.dto.ErrorResponseDto;
+import jakarta.servlet.http.HttpServletRequest;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.ErrorResponseException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-import java.util.Map;
+import java.time.Instant;
 
-@ControllerAdvice
+@Slf4j
+@RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    private final CurrencyRateRepository repository;
+    @ExceptionHandler(InvalidCurrencyException.class)
+    public ResponseEntity<ErrorResponseDto> handleInvalidCurrency(
+            InvalidCurrencyException ex,
+            HttpServletRequest request) {
 
-    public GlobalExceptionHandler(CurrencyRateRepository repository) {
-        this.repository = repository;
+        log.error("Invalid currency: {}", ex.getMessage(), ex);
+
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(new ErrorResponseDto(
+                        Instant.now(),
+                        HttpStatus.BAD_REQUEST.value(),
+                        "Invalid Currency",
+                        ex.getMessage(),
+                        request.getRequestURI()
+                ));
     }
 
-    @ExceptionHandler(InvalidCurrencyException.class)
-    public ResponseEntity<?> handleInvalidCurrency(InvalidCurrencyException ex) {
-        return ResponseEntity.badRequest().body(Map.of(
-                "error", ex.getMessage(),
-                "validCurrencies", repository.findAllCurrencies()
-        ));
+    @ExceptionHandler(ErrorResponseException.class)
+    public ResponseEntity<ErrorResponseDto> handleWebClientError(
+            ErrorResponseException ex,
+            HttpServletRequest request) {
+
+        log.error("WebClient error: {}", ex.getMessage(), ex);
+
+        return ResponseEntity
+                .status(ex.getStatusCode())
+                .body(new ErrorResponseDto(
+                        Instant.now(),
+                        ex.getStatusCode().value(),
+                        "External Service Error",
+                        ex.getMessage(),
+                        request.getRequestURI()
+                ));
     }
 
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<?> handleGenericException(Exception ex) {
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
-                "error", "Unexpected server error",
-                "details", ex.getMessage()
-        ));
+    public ResponseEntity<ErrorResponseDto> handleGeneralException(
+            Exception ex,
+            HttpServletRequest request) {
+
+        log.error("Unexpected error: {}", ex.getMessage(), ex);
+
+        return ResponseEntity
+                .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ErrorResponseDto(
+                        Instant.now(),
+                        HttpStatus.INTERNAL_SERVER_ERROR.value(),
+                        "Internal Server Error",
+                        ex.getMessage(),
+                        request.getRequestURI()
+                ));
     }
 }
