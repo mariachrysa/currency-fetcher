@@ -1,21 +1,14 @@
 package com.example.currencyfetcher.cache;
 
+import lombok.*;
+
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
 public class CachedCurrency {
-    private double rate;
+    private BigDecimal rate;
     private LocalDateTime timestamp;
-
-    public CachedCurrency(double rate, LocalDateTime timestamp) {
-        this.rate = rate;
-        this.timestamp = timestamp;
-    }
-
-    public double getRate() {
-        return rate;
-    }
-
-    public LocalDateTime getTimestamp() {
-        return timestamp;
-    }
 }
