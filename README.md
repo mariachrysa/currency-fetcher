@@ -7,7 +7,7 @@ A Spring Boot backend service that fetches live currency exchange rates from the
 
 ---
 
-## Featuresbgh 
+## Features
 
 - Fetches live rates every 60 seconds (scheduled)
 - Caches rates in-memory to reduce DB/API load
