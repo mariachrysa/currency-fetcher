@@ -28,7 +28,7 @@ public class CacheService {
         if (rate == null || timestamp == null) {
             throw new IllegalArgumentException("Cannot cache null values.");
         }
-        CachedCurrency updated = new CachedCurrency(rate, timestamp);
+        CachedCurrency updated = new CachedCurrency("EUR", rate, timestamp);
         cache.put(code.toUpperCase(), updated);
         return updated;
     }

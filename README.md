@@ -1,13 +1,13 @@
 # Currency Fetcher App (Spring Boot)
 
 **Author:** Maria Chrysanthou  
-**Date:** 17/07/2025
+**Date:** 30/07/2025
 
 A Spring Boot backend service that fetches live currency exchange rates from the [ExchangeRate API](https://www.exchangerate-api.com), stores them in a database, caches them, and exposes multiple REST endpoints to query, convert, and filter them.
 
 ---
 
-## Features
+## Featuresbgh 
 
 - Fetches live rates every 60 seconds (scheduled)
 - Caches rates in-memory to reduce DB/API load

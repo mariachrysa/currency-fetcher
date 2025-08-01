@@ -68,4 +68,23 @@ public class GlobalExceptionHandler {
                         request.getRequestURI()
                 ));
     }
+
+    @ExceptionHandler(ExternalServiceException.class)
+    public ResponseEntity<ErrorResponseDto> handleExternalServiceFailure(
+            ExternalServiceException ex,
+            HttpServletRequest request) {
+
+        log.error("External service failure: {}", ex.getMessage(), ex);
+
+        return ResponseEntity
+                .status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(new ErrorResponseDto(
+                        Instant.now(),
+                        HttpStatus.SERVICE_UNAVAILABLE.value(),
+                        "Service Unavailable",
+                        ex.getMessage(),
+                        request.getRequestURI()
+                ));
+    }
+
 }

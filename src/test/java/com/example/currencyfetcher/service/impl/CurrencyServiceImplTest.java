@@ -1,87 +1,132 @@
-//package com.example.currencyfetcher.service.impl;
-//
-//import com.example.currencyfetcher.cache.CachedCurrency;
-//import com.example.currencyfetcher.dto.CurrencyResponseDto;
-//import com.example.currencyfetcher.dto.ConvertedCurrencyDto;
-//import com.example.currencyfetcher.exceptions.InvalidCurrencyException;
-//import com.example.currencyfetcher.model.CurrencyRate;
-//import com.example.currencyfetcher.repository.CurrencyRateRepository;
-//import org.junit.jupiter.api.BeforeEach;
-//import org.junit.jupiter.api.Test;
-//import org.modelmapper.ModelMapper;
-//
-//import java.time.LocalDateTime;
-//import java.util.List;
-//import java.util.Optional;
-//
-//import static org.junit.jupiter.api.Assertions.*;
-//import static org.mockito.Mockito.*;
-//
-//class CurrencyServiceImplTest {
-//
-//    private CurrencyRateRepository repository;
-//    private CurrencyServiceImpl service;
-//
-//    @BeforeEach
-//    void setUp() {
-//        repository = mock(CurrencyRateRepository.class);
-//        service = new CurrencyServiceImpl(repository, "dummy-api-key", );
-//    }
-//
-//    @Test
-//    void getLatestFromDBOrThrow_validCurrency_returnsRate() {
-//        CurrencyRate mock = new CurrencyRate(1L, "USD", 1.0, LocalDateTime.now());
-//        when(repository.findTopByCurrencyCodeOrderByTimestampDesc("USD")).thenReturn(mock);
-//
-//        CurrencyRate result = service.getLatestFromDBOrThrow("USD");
-//
-//        assertEquals("USD", result.getCurrencyCode());
-//    }
-//
-//    @Test
-//    void getLatestFromDBOrThrow_invalidCurrency_throwsException() {
-//        when(repository.findTopByCurrencyCodeOrderByTimestampDesc("XXX")).thenReturn(null);
-//
-//        assertThrows(InvalidCurrencyException.class, () -> service.getLatestFromDBOrThrow("XXX"));
-//    }
-//
-//    @Test
-//    void getCurrencyRate_cacheMiss_returnsFromDB() {
-//        CurrencyRate mock = new CurrencyRate(null, "EUR", 1.3, LocalDateTime.now());
-//        when(repository.findTopByCurrencyCodeOrderByTimestampDesc("EUR")).thenReturn(mock);
-//
-//        Optional<CachedCurrency> result = service.getCurrencyRate("EUR");
-//
-//        assertTrue(result.isPresent());
-//        assertEquals(1.3, result.get().getRate());
-//    }
-//
-//    @Test
-//    void convertCurrency_validInputs_returnsConvertedDto() {
-//        LocalDateTime now = LocalDateTime.now();
-//        when(repository.findTopByCurrencyCodeOrderByTimestampDesc("USD"))
-//                .thenReturn(new CurrencyRate(null, "USD", 1.0, now));
-//        when(repository.findTopByCurrencyCodeOrderByTimestampDesc("JPY"))
-//                .thenReturn(new CurrencyRate(null, "JPY", 150.0, now));
-//
-//        Optional<ConvertedCurrencyDto> result = service.convertCurrency("USD", "JPY", 100);
-//
-//        assertTrue(result.isPresent());
-//        assertEquals(15000.0, result.get().getConverted());
-//    }
-//
-//    @Test
-//    void filterByMinRate_returnsFilteredDtos() {
-//        LocalDateTime now = LocalDateTime.now();
-//        List<CurrencyRate> mockRates = List.of(
-//                new CurrencyRate(null, "USD", 1.0, now),
-//                new CurrencyRate(null, "BTC", 30000.0, now)
-//        );
-//        when(repository.findAll()).thenReturn(mockRates);
-//
-//        List<CurrencyResponseDto> result = service.filterByMinRate(5000.0);
-//
-//        assertEquals(1, result.size());
-//        assertEquals("BTC", result.get(0).getCurrency());
-//    }
-//}
+package com.example.currencyfetcher.service.impl;
+
+import com.example.currencyfetcher.cache.CacheService;
+import com.example.currencyfetcher.cache.CachedCurrency;
+import com.example.currencyfetcher.clients.ExchangeClient;
+import com.example.currencyfetcher.dto.CurrencyResponseDto;
+import com.example.currencyfetcher.exceptions.ExternalServiceException;
+import com.example.currencyfetcher.exceptions.InvalidCurrencyException;
+import com.example.currencyfetcher.model.CurrencyRate;
+import com.example.currencyfetcher.model.CurrencyRateId;
+import com.example.currencyfetcher.repository.CurrencyRateRepository;
+import com.example.currencyfetcher.validation.CurrencyValidator;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.*;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.*;
+
+import static org.assertj.core.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
+@ExtendWith(MockitoExtension.class)
+class CurrencyServiceImplTest {
+
+    @Mock
+    private ExchangeClient exchangeClient;
+
+    @Mock
+    private CurrencyRateRepository repository;
+
+    @Mock
+    private CacheService cacheService;
+
+    @Mock
+    private CurrencyValidator validator;
+
+    @InjectMocks
+    private CurrencyServiceImpl currencyService;
+
+    @Test
+    void shouldReturnCachedCurrency_whenCacheIsFresh() {
+        // Arrange
+        String currency = "EUR";
+        BigDecimal rate = new BigDecimal("1.15");
+        LocalDateTime timestamp = LocalDateTime.now();
+
+        CachedCurrency cached = new CachedCurrency(currency, rate, timestamp);
+        when(cacheService.getIfFresh(eq(currency))).thenReturn(Optional.of(cached));
+
+        // Act
+        Optional<CurrencyResponseDto> result = currencyService.getCachedCurrency(currency);
+
+        // Assert
+        assertThat(result).isPresent();
+        CurrencyResponseDto dto = result.get();
+
+        assertThat(dto.currencyCode()).isEqualTo("EUR");
+        assertThat(dto.rate()).isEqualByComparingTo(rate);
+        assertThat(dto.timestamp()).isEqualTo(timestamp);
+
+        verify(cacheService).getIfFresh(eq(currency));
+        verifyNoInteractions(repository); // Ensure DB was not called
+    }
+
+    @Test
+    void shouldFetchFromDB_whenCacheIsEmpty() {
+        // Arrange
+        String currency = "GBP";
+        BigDecimal rate = new BigDecimal("1.25");
+        LocalDateTime timestamp = LocalDateTime.now();
+
+        // Simulate missing cache
+        when(cacheService.getIfFresh(eq(currency))).thenReturn(Optional.empty());
+
+        // Simulate DB has latest value
+        CurrencyRate fromDb = new CurrencyRate();
+        CurrencyRateId id = new CurrencyRateId();
+        id.setCurrencyCode(currency);
+        id.setTimestamp(timestamp);
+        fromDb.setId(id);
+        fromDb.setRate(rate);
+
+        when(repository.findTopByIdCurrencyCodeOrderByIdTimestampDesc(eq(currency))).thenReturn(fromDb);
+
+        // Act
+        Optional<CurrencyResponseDto> result = currencyService.getCachedCurrency(currency);
+
+        // Assert
+        assertThat(result).isPresent();
+        CurrencyResponseDto dto = result.get();
+        assertThat(dto.currencyCode()).isEqualTo("GBP");
+        assertThat(dto.rate()).isEqualByComparingTo(rate);
+        assertThat(dto.timestamp()).isEqualTo(timestamp);
+
+        // Verifications
+        verify(cacheService).getIfFresh(eq(currency));
+        verify(repository).findTopByIdCurrencyCodeOrderByIdTimestampDesc(eq(currency));
+        verify(cacheService).update(eq(currency), eq(rate), eq(timestamp));
+    }
+
+    @Test
+    void shouldNotCrash_whenExternalApiFails() {
+        // Arrange
+        when(exchangeClient.fetchLatestRates(anyString()))
+                .thenThrow(new ExternalServiceException("API is down"));
+
+        // Act
+        assertThatCode(() -> currencyService.fetchAndSaveRates())
+                .doesNotThrowAnyException();
+
+        // Assert
+        verify(exchangeClient).fetchLatestRates(eq("USD"));
+        verify(repository, never()).saveAll(anyList());
+    }
+
+    @Test
+    void shouldThrowInvalidCurrencyException_whenUnsupportedCurrency() {
+        // Arrange
+        String invalidCode = "XYZ";
+        doThrow(new InvalidCurrencyException("Unsupported currency: XYZ"))
+                .when(validator).validate(invalidCode);
+
+        // Act & Assert
+        assertThatThrownBy(() -> currencyService.getRatesForCurrency(invalidCode))
+                .isInstanceOf(InvalidCurrencyException.class)
+                .hasMessageContaining("Unsupported currency");
+    }
+
+}

@@ -9,6 +9,7 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @NoArgsConstructor
 public class CachedCurrency {
+    private String code;
     private BigDecimal rate;
     private LocalDateTime timestamp;
 }
