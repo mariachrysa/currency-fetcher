@@ -7,6 +7,8 @@ import com.example.currencyfetcher.dto.CurrencyApiResponseDto;
 import com.example.currencyfetcher.dto.CurrencyRateHistoryDto;
 import com.example.currencyfetcher.dto.CurrencyResponseDto;
 import com.example.currencyfetcher.exceptions.InvalidCurrencyException;
+import com.example.currencyfetcher.mapper.ConvertedCurrencyMapper;
+import com.example.currencyfetcher.mapper.CurrencyMapper;
 import com.example.currencyfetcher.model.CurrencyRate;
 import com.example.currencyfetcher.repository.CurrencyRateRepository;
 import com.example.currencyfetcher.service.CurrencyService;
@@ -66,7 +68,7 @@ public class CurrencyServiceImpl implements CurrencyService {
                     CurrencyRate latest = repository.findTopByIdCurrencyCodeOrderByIdTimestampDesc(currency.toUpperCase());
                     if (latest == null) return Optional.empty();
                     cacheService.update(currency, latest.getRate(), latest.getId().getTimestamp());
-                    return Optional.of(new CurrencyResponseDto(currency.toUpperCase(), latest.getRate(), latest.getId().getTimestamp()));
+                    return Optional.of(CurrencyMapper.toDto(latest));
                 });
     }
 
@@ -84,12 +86,7 @@ public class CurrencyServiceImpl implements CurrencyService {
                 .multiply(toRate.rate())
                 .divide(fromRate.rate(), 4, RoundingMode.HALF_UP);
 
-        return new ConvertedCurrencyDto(
-                from.toUpperCase(),
-                to.toUpperCase(),
-                amount,
-                converted
-        );
+        return ConvertedCurrencyMapper.toDto(fromRate, toRate, amount, converted);
     }
 
     @Override
@@ -98,7 +95,7 @@ public class CurrencyServiceImpl implements CurrencyService {
 
         return latestRates.values().stream()
                 .filter(rate -> rate.getRate().compareTo(BigDecimal.valueOf(minRate)) >= 0)
-                .map(rate -> new CurrencyResponseDto(rate.getId().getCurrencyCode(), rate.getRate(), rate.getId().getTimestamp()))
+                .map(CurrencyMapper::toDto)
                 .collect(Collectors.toList());
     }
 
@@ -109,7 +106,7 @@ public class CurrencyServiceImpl implements CurrencyService {
         return latestRates.values().stream()
                 .sorted(Comparator.comparing(CurrencyRate::getRate).reversed())
                 .limit(limit)
-                .map(rate -> new CurrencyResponseDto(rate.getId().getCurrencyCode(), rate.getRate(), rate.getId().getTimestamp()))
+                .map(CurrencyMapper::toDto)
                 .collect(Collectors.toList());
     }
 
@@ -119,18 +116,9 @@ public class CurrencyServiceImpl implements CurrencyService {
         return Optional.ofNullable(repository.findTopByIdCurrencyCodeOrderByIdTimestampDesc(code.toUpperCase()));
     }
 
-    private Map<String, CurrencyRate> getLatestRatesMap(List<CurrencyRate> rates) {
-        return rates.stream().collect(Collectors.toMap(
-                rate -> rate.getId().getCurrencyCode(),
-                r -> r,
-                (r1, r2) -> r1.getId().getTimestamp().isAfter(r2.getId().getTimestamp()) ? r1 : r2
-        ));
-    }
-
     @Override
     public CurrencyResponseDto getRatesForCurrency(String code) {
         return getCachedCurrency(code)
-                .map(dto -> new CurrencyResponseDto(dto.currencyCode(), dto.rate(), dto.timestamp()))
                 .orElseThrow(() -> new InvalidCurrencyException(code));
     }
 
@@ -140,11 +128,15 @@ public class CurrencyServiceImpl implements CurrencyService {
 
         return repository.findByIdCurrencyCodeOrderByIdTimestampDesc(code.toUpperCase())
                 .stream()
-                .map(rate -> new CurrencyRateHistoryDto(
-                        rate.getId().getCurrencyCode(),
-                        rate.getRate(),
-                        rate.getId().getTimestamp()
-                ))
-                .toList();
+                .map(CurrencyMapper::toHistoryDto)
+                .collect(Collectors.toList());
+    }
+
+    private Map<String, CurrencyRate> getLatestRatesMap(List<CurrencyRate> rates) {
+        return rates.stream().collect(Collectors.toMap(
+                rate -> rate.getId().getCurrencyCode(),
+                r -> r,
+                (r1, r2) -> r1.getId().getTimestamp().isAfter(r2.getId().getTimestamp()) ? r1 : r2
+        ));
     }
 }
