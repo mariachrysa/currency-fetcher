@@ -1,7 +1,7 @@
 # Currency Fetcher App (Spring Boot)
 
 **Author:** Maria Chrysanthou  
-**Date:** 30/07/2025
+**Date:** 06/08/2025
 
 A Spring Boot backend service that fetches live currency exchange rates from the [ExchangeRate API](https://www.exchangerate-api.com), stores them in a database, caches them, and exposes multiple REST endpoints to query, convert, and filter them.
 
@@ -103,7 +103,7 @@ Returns the top 5 currencies by exchange rate.
 
 ---
 
-### 3. Historical Rates 
+### 5. Historical Rates 
 ```http
 GET /api/currency/history/{code}
 ```
@@ -159,6 +159,9 @@ com.example.currencyfetcher
 │   ├── ExternalServiceException.java
 │   ├── GlobalExceptionHandler.java
 │   └── InvalidCurrencyException.java
+├── mapper/                 # Central mapping logic
+│   └── CurrencyMapper.java            
+│   └── ConvertedCurrencyMapper.java
 ├── model/                 # JPA entities
 │   ├── CurrencyRate.java
 │   └── CurrencyRateId.java
